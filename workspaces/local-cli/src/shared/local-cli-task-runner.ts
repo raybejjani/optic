@@ -28,6 +28,7 @@ import {
   loadPathsAndConfig,
   makeUiBaseUrl,
   warningFromOptic,
+  ShapehashReader,
 } from '@useoptic/cli-shared';
 import * as uuid from 'uuid';
 import { CliTaskSession } from '@useoptic/cli-shared/build/tasks';
@@ -296,7 +297,13 @@ ${blockers.map((x) => `[pid ${x.pid}]: ${x.cmd}`).join('\n')}
       testCommand
     );
 
+    await persistenceManager.init();
+
+    let shFile = '/Users/raybejjani/optic/monorail/projects/scarf/foo.jsonl';
+    let sh = new ShapehashReader(persistenceManager);
+    let shPromise = sh.run(shFile);
     await sessionManager.run(persistenceManager);
+    await shPromise;
 
     if (!commandToRunWhenStarted && this.options.shouldPassThroughExitCode) {
       this.exitWithCode = sessionManager.getExitCodeOfProcess();

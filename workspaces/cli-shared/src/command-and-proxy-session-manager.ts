@@ -40,8 +40,6 @@ class CommandAndProxySessionManager {
       OPTIC_PROXY_PORT: this.config.proxyConfig.port.toString(),
     };
 
-    await persistenceManager.init();
-
     inboundProxy.events.on('sample', (sample: IHttpInteraction) => {
       userDebugLogger(
         `attempting to save sample ${sample.request.method} ${sample.request.path}`
