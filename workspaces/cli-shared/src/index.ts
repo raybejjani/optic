@@ -76,7 +76,6 @@ export interface IOpticTaskRunner {
 export { CaptureSaver as SaasCaptureSaver } from './captures/avro/saas/capture-saver';
 export { CaptureSaver as FileSystemAvroCaptureSaver } from './captures/avro/file-system/capture-saver';
 export { CaptureLoader as FileSystemAvroCaptureLoader } from './captures/avro/file-system/capture-loader';
-export { ShapehashReader } from './captures/avro/file-system/shapehash-reader';
 ////////////////////////////////////////////////////////////////////////////////
 export { fromOptic, errorFromOptic, warningFromOptic } from './conversation';
 
