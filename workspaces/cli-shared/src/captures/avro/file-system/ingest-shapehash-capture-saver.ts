@@ -1,7 +1,14 @@
 import * as fs from 'fs';
+import url from 'url';
 
 import { getPathsRelativeToConfig } from '@useoptic/cli-config';
 import { CaptureSaver } from './capture-saver';
+import { DefaultQueryParser } from '../../../query/parsers/query-string/DefaultQueryParser';
+import { IQueryParser } from '../../../query/query-parser-interfaces';
+import { IArbitraryData } from '../../../optic-types';
+//@ts-ignore
+import { toBytes } from '@useoptic/shape-hash';
+import { developerDebugLogger } from '../../../index';
 
 // ingestShapehash reads in a jsonl file of shapehash encoded as json. It saves
 // each entry as a synthetic interaction with persistenceManager.
@@ -9,6 +16,7 @@ import { CaptureSaver } from './capture-saver';
 // UI is running.
 export async function ingestShapehash(inFile: string, captureId: string) {
   let interactionCount = 0;
+  let queryParser = new DefaultQueryParser();
 
   let {
     capturesPath: capturesBaseDirectory,
@@ -46,25 +54,23 @@ export async function ingestShapehash(inFile: string, captureId: string) {
           return;
         }
 
-        const parsedJson = JSON.parse(line);
-        const entry = parsedJson.log.entries[0];
+        const entry = JSON.parse(line);
+        developerDebugLogger('saw entry', { entry });
+        const parsedUrl = url.parse(entry.url);
+
         const sample = {
           tags: [],
           uuid: captureId,
           request: {
-            host: 'FML: hostname',
-            method: entry.method || 'UNK',
-            path: '/it/works',
+            host: parsedUrl.host || '',
+            method: entry.request.method,
+            path: parsedUrl.pathname || '',
             headers: {
               asJsonString: null,
               asText: null,
               shapeHashV1Base64: null,
             },
-            query: {
-              asJsonString: null,
-              asText: null,
-              shapeHashV1Base64: null,
-            },
+            query: extractQueryParameters(entry.url, queryParser),
             body: {
               contentType: null,
               value: {
@@ -92,11 +98,36 @@ export async function ingestShapehash(inFile: string, captureId: string) {
           },
         };
 
+        developerDebugLogger('saving', { sample });
         captureSaver.save(sample);
         interactionCount++;
       }
     });
   });
+}
+
+function extractQueryParameters(
+  rawUrl: string,
+  queryParser: IQueryParser
+): IArbitraryData {
+  const rawQuery = url.parse(rawUrl).query;
+  developerDebugLogger('extracting query params', { rawQuery });
+
+  if (rawQuery) {
+    const jsonLikeValue = queryParser.parse(rawQuery);
+    return {
+      asJsonString: JSON.stringify(jsonLikeValue),
+      asText: rawQuery,
+      shapeHashV1Base64:
+        jsonLikeValue && toBytes(jsonLikeValue).toString('base64'),
+    };
+  } else {
+    return {
+      asJsonString: null,
+      asText: null,
+      shapeHashV1Base64: null,
+    };
+  }
 }
 
 // TODO: Use something like
@@ -105,123 +136,85 @@ export async function ingestShapehash(inFile: string, captureId: string) {
 // from workspaces/cli-shared/src/httptoolkit-capturing-proxy.ts
 
 /**
- * Sample shapehash encoding of a scoop.Har from scarf
+ * Sample shapehash encoding of reuest/response from from scarf
  *
- *{
-  "log": {
-    "browser": {
-      "comment": "string",
-      "name": "string",
-      "version": "string"
+{
+  "request": {
+    "body": {
+      "encoding": "string",
+      "mimeType": "string",
+      "text": "string"
     },
-    "creator": {
-      "name": "string",
-      "version": "string"
-    },
-    "entries": [
+    "headers": [
       {
-        "cache": {},
-        "pageref": "string",
-        "request": {
-          "bodySize": 1,
-          "cookies": [],
-          "headers": [
-            {
-              "name": "string",
-              "value": "string"
-            },
-            {
-              "name": "string",
-              "value": "string"
-            },
-            {
-              "name": "string",
-              "value": "string"
-            },
-            {
-              "name": "string",
-              "value": "string"
-            },
-            {
-              "name": "string",
-              "value": "string"
-            }
-          ],
-          "headersSize": 1,
-          "httpVersion": "string",
-          "method": "string",
-          "postData": {
-            "encoding": "string",
-            "mimeType": "string",
-            "text": "string"
-          },
-          "queryString": [],
-          "url": "string"
-        },
-        "response": {
-          "bodySize": 1,
-          "content": {
-            "encoding": "string",
-            "mimeType": "string",
-            "size": 1,
-            "text": "string"
-          },
-          "cookies": [],
-          "headers": [
-            {
-              "name": "string",
-              "value": "string"
-            },
-            {
-              "name": "string",
-              "value": "string"
-            },
-            {
-              "name": "string",
-              "value": "string"
-            },
-            {
-              "name": "string",
-              "value": "string"
-            },
-            {
-              "name": "string",
-              "value": "string"
-            },
-            {
-              "name": "string",
-              "value": "string"
-            },
-            {
-              "name": "string",
-              "value": "string"
-            }
-          ],
-          "headersSize": 1,
-          "httpVersion": "string",
-          "redirectURL": "string",
-          "status": 1,
-          "statusText": "string"
-        },
-        "serverIPAddress": "string",
-        "startedDateTime": "string",
-        "time": 1,
-        "timings": {
-          "receive": 1,
-          "send": 1,
-          "wait": 1
-        }
+        "name": "Host",
+        "value": "httpbin.org"
+      },
+      {
+        "name": "User-Agent",
+        "value": "curl/7.64.1"
+      },
+      {
+        "name": "Accept",
+        "value": "* /*"
+      },
+      {
+        "name": "Content-Length",
+        "value": "7"
+      },
+      {
+        "name": "Content-Type",
+        "value": "application/x-www-form-urlencoded"
       }
     ],
-    "pages": [
+    "method": "PUT",
+    "query": [
       {
-        "id": "string",
-        "pageTimings": {},
-        "startedDateTime": "string",
-        "title": "string"
+        "name": "a",
+        "value": "4"
+      }
+    ]
+  },
+  "response": {
+    "body": {
+      "encoding": "string",
+      "mimeType": "string",
+      "size": 1,
+      "text": "string"
+    },
+    "headers": [
+      {
+        "name": "Date",
+        "value": "Tue, 25 May 2021 16:38:54 GMT"
+      },
+      {
+        "name": "Content-Type",
+        "value": "application/json"
+      },
+      {
+        "name": "Content-Length",
+        "value": "443"
+      },
+      {
+        "name": "Connection",
+        "value": "keep-alive"
+      },
+      {
+        "name": "Server",
+        "value": "gunicorn/19.9.0"
+      },
+      {
+        "name": "Access-Control-Allow-Origin",
+        "value": "*"
+      },
+      {
+        "name": "Access-Control-Allow-Credentials",
+        "value": "true"
       }
     ],
-    "version": "string"
-  }
+    "status": 200
+  },
+  "tags": [],
+  "url": "http://httpbin.org/put?a=4"
 }
-**/
+  **/
